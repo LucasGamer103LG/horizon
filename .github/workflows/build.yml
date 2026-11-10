@@ -10,13 +10,25 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: dtolnay/rust-toolchain@stable
-      - name: Baixar server.jar 26.3
+      - name: Baixar Minecraft 26.3
         run: |
+          set -e
+          MC=$HOME/.minecraft
+          V=26.3
+          mkdir -p $MC/versions/$V $MC/libraries $MC/assets/indexes $MC/assets/objects
           META=$(curl -s https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -r '.versions[] | select(.id=="26.3") | .url')
-          SERVER=$(curl -s "$META" | jq -r '.downloads.server.url')
-          echo "URL: $SERVER"
-          curl -L -o server.jar "$SERVER"
-          ls -l server.jar
+          J=$MC/versions/$V/$V.json
+          curl -sL "$META" -o $J
+          curl -sL "$(jq -r '.downloads.server.url' $J)" -o server.jar
+          curl -sL "$(jq -r '.downloads.client.url' $J)" -o $MC/versions/$V/$V.jar
+          jq -r '.libraries[] | .downloads.artifact // empty | "\(.path) \(.url)"' $J | while read p u; do
+            mkdir -p "$MC/libraries/$(dirname $p)"
+            curl -sL "$u" -o "$MC/libraries/$p"
+          done
+          AI=$(jq -r '.assetIndex.id' $J)
+          curl -sL "$(jq -r '.assetIndex.url' $J)" -o $MC/assets/indexes/$AI.json
+          jq -r '.objects[].hash' $MC/assets/indexes/$AI.json | sort -u | xargs -P 16 -I{} sh -c 'h={}; p=${h%${h#??}}; mkdir -p $HOME/.minecraft/assets/objects/$p; curl -sL https://resources.download.minecraft.net/$p/$h -o $HOME/.minecraft/assets/objects/$p/$h'
+          ls -l server.jar $MC/versions/$V
       - run: cargo run --release -p horizon-prepare -- --prepare --server-jar server.jar
       - run: bash packaging/android/make_derived_pack.sh
       - uses: actions/upload-artifact@v4
