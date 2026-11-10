@@ -10,7 +10,14 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo run --release -p horizon-prepare -- --prepare --server-jar
+      - name: Baixar server.jar 26.3
+        run: |
+          META=$(curl -s https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -r '.versions[] | select(.id=="26.3") | .url')
+          SERVER=$(curl -s "$META" | jq -r '.downloads.server.url')
+          echo "URL: $SERVER"
+          curl -L -o server.jar "$SERVER"
+          ls -l server.jar
+      - run: cargo run --release -p horizon-prepare -- --prepare --server-jar server.jar
       - run: bash packaging/android/make_derived_pack.sh
       - uses: actions/upload-artifact@v4
         with:
